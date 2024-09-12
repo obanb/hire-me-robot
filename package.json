@@ -1,0 +1,53 @@
+{
+  "name": "my-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "next build",
+    "start": "NODE_ENV=production ts-node server.ts",
+    "lint": "next lint",
+    "db:seed": "tsx server/sqlite-seed.ts",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:migration": "drizzle-kit generate",
+    "vector:seed": "tsx server/vector-seed.ts"
+  },
+  "type": "module",
+  "dependencies": {
+    "@auth/drizzle-adapter": "^1.4.2",
+    "@heroicons/react": "v1",
+    "@langchain/pinecone": "^0.0.9",
+    "@libsql/client": "^0.9.0",
+    "@magic-sdk/admin": "^2.4.1",
+    "@nextui-org/react": "^2.4.6",
+    "@pinecone-database/pinecone": "^3.0.2",
+    "dotenv": "^16.4.5",
+    "drizzle-kit": "^0.24.0",
+    "drizzle-orm": "^0.33.0",
+    "express": "^4.19.2",
+    "framer-motion": "^11.3.24",
+    "langchain": "^0.2.17",
+    "lucide-react": "^0.426.0",
+    "magic-sdk": "^28.5.0",
+    "next": "14.2.5",
+    "next-auth": "^5.0.0-beta.19",
+    "openai": "^4.58.1",
+    "react": "^18",
+    "react-dom": "^18",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
+    "ts-node": "^10.9.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.17.0",
+    "typescript": "^5"
+  }
+}
