@@ -1,7 +1,7 @@
 'use client';
 
 import { useContext, useState, useEffect, useRef } from 'react';
-import { PaperAirplaneIcon, ArrowUpIcon, QuestionMarkCircleIcon, ArrowDownIcon, GlobeAltIcon} from '@heroicons/react/solid';
+import { PaperAirplaneIcon, ArrowUpIcon, QuestionMarkCircleIcon, ArrowDownIcon, FastForwardIcon} from '@heroicons/react/solid';
 
 import { Button } from '@nextui-org/react';
 import Logo from '../images/avatar_boss.png';
@@ -97,7 +97,6 @@ const ChatWindow = () => {
                         className={`${buttonColorClass} flex items-center gap-2 rounded-md shadow-md px-4 py-2`}
                     >
                         <ArrowDownIcon className="w-5 h-5" />
-                        Scroll to Last
                     </button>
                 </div>
                 <div className="space-y-4">
@@ -152,16 +151,6 @@ const ChatWindow = () => {
                         <PaperAirplaneIcon className="w-5 h-5" />
                         Send
                     </button>
-
-                    {/* Scroll to Top Button */}
-                    <button
-                        onClick={handleScrollToTop}
-                        className={`${buttonColorClass} flex items-center gap-2 rounded-md shadow-md px-4 py-2`}
-                    >
-                        <ArrowUpIcon className="w-5 h-5" />
-                        Scroll to Top
-                    </button>
-
                     {/* Get Next Question Button */}
                     <button
                         onClick={questionRequest}
@@ -169,6 +158,21 @@ const ChatWindow = () => {
                     >
                         <QuestionMarkCircleIcon className="w-5 h-5" />
                         Get next question
+                    </button>
+                    <button
+                        onClick={questionRequest}
+                        className={`bg-orange-400 hover:bg-orange-500 text-white flex items-center gap-2 rounded-md shadow-md px-4 py-2`}
+                    >
+                        <FastForwardIcon className="w-5 h-5" />
+                        Finish Chat
+                    </button>
+
+                    {/* Scroll to Top Button */}
+                    <button
+                        onClick={handleScrollToTop}
+                        className={`${buttonColorClass} flex items-center gap-2 rounded-md shadow-md px-4 py-2`}
+                    >
+                        <ArrowUpIcon className="w-5 h-5" />
                     </button>
                 </div>
             </div>

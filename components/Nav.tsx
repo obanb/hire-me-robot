@@ -2,10 +2,10 @@
 
 const Nav = () => {
     return (
-        <nav className="h-[120px] flex items-center justify-start px-10 bg-white">
+        <nav className="h-[120px] flex items-center justify-start px-20 bg-white">
             <div className="flex items-center">
                 {/* Logo */}
-                <h1 className="text-2xl font-bold text-indigo-600 mr-4">
+                <h1 className="text-4xl font-bold text-indigo-600 mr-4">
                     Hire<span className="text-green-500">Me</span>
                 </h1>
 
