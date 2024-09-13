@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto'
 import {openai} from "./openai-connector";
 import {ChatCompletionStream} from "openai/src/lib/ChatCompletionStream";
 
+
 let activeWs = {};
 
 const __EMBEDDINGS__ = 'text-embedding-3-small'
@@ -36,6 +37,11 @@ type Agent = {
 
 type Question = {id:string, createdAt: string, used: boolean, text: string, agent: string, invitationId: string}
 
+
+export const linkThreadWsConnection = async(socket: Socket, handshakeToken: string) => {
+
+}
+
 export const linkAgentWsConnection = async(socket: Socket, handshakeToken: string) => {
     console.log(`ws agent ${socket.id} connected to ${socket.nsp.name || 'default namespace'} with handshake token: ${handshakeToken}` );
     activeWs[socket.id] = socket;
@@ -46,32 +52,36 @@ export const linkAgentWsConnection = async(socket: Socket, handshakeToken: strin
 
 
     const invitations = await db.select().from(invitation as SQLiteTable).where(eq(invitation.id, "bf61b5eb-25d9-445a-8d54-de1e4caf046c")).all()
-    const agents: Agent[] = await db.select().from(agent as SQLiteTable).where(eq(agent.invitationId, "bf61b5eb-25d9-445a-8d54-de1e4caf046c")).all()
+    const agentCfgs: Agent[] = await db.select().from(agent as SQLiteTable).where(eq(agent.invitationId, "bf61b5eb-25d9-445a-8d54-de1e4caf046c")).all()
     const questions: Question[] = await db.select().from(question as SQLiteTable).where(eq(question.invitationId, "bf61b5eb-25d9-445a-8d54-de1e4caf046c")).all()
 
-    let lastUsedAgent = agents.sort((a, b) => a.priority - b.priority)[0].id
+    let lastUsedAgent = agentCfgs.sort((a, b) => a.priority - b.priority)[0].id
 
-    const arbiterAgent = spawnArbiterAgent(socket, agents)
+    const arbiterAgent = spawnArbiterAgent(socket, agentCfgs)
 
-    for (const agentCfg of agents) {
-        console.log(`Spawning agent ${agentCfg.name} with id ${agentCfg.id}`)
-        const agent = await spawnAiAgent(socket, questions, agentCfg)
+    const activeAgents = agentCfgs.reduce((acc: Record<string, ReturnType<typeof spawnAiAgent>>, agent) => {
+        acc[agent.id] = spawnAiAgent(socket, questions, agent)
+        return acc
+    },{})
 
-        socket.on('message', async (msg) => {
-            const arbiterResponse = await arbiterAgent.identifyAppropriateAgent(msg)
-            console.log('arbiter response', arbiterResponse)
-            if(arbiterResponse?.agentId === agentCfg.id) {
-                lastUsedAgent = agentCfg.id
-                agent.prompt(msg)
-            }else {
-                if(agentCfg.id === lastUsedAgent) {
-                    lastUsedAgent = agentCfg.id
-                    console.log(`Switching agent to last used: ${lastUsedAgent}`)
-                    agent.prompt(msg)
-                }
+
+    socket.on('message', async (msg) => {
+        try {
+            const arbiterResponse = await arbiterAgent.identifyAppropriateAgent(msg);
+            console.log('Arbiter response:', arbiterResponse);
+
+            // Determine the agent to use (either the identified agent or the last used one)
+            const agentId = arbiterResponse?.agentId || lastUsedAgent;
+            const agent = activeAgents[agentId];
+
+            if (agent) {
+                lastUsedAgent = agentId;
+                agent.prompt(msg);
             }
-        });
-    }
+        } catch (error) {
+            console.error('Error handling message:', error);
+        }
+    });
 
     socket.on('message', (msg) => {
         socket.emit('response', {message:msg});
@@ -96,9 +106,10 @@ const spawnArbiterAgent = (socket: Socket, agents: Agent[]) => {
 
     return {
         identifyAppropriateAgent: async (text: string) => {
+            ctx.push({role: 'user', content: text})
             const stream: ChatCompletionStream<unknown> = await  openai.beta.chat.completions.stream({
                 model: __GPT_MODEL__,
-                messages: [...ctx, {role: 'user', content: `${text}`}],
+                messages: ctx,
                 stream: true,
                 tools: [{
                     type: 'function',
@@ -151,122 +162,114 @@ const spawnAiAgent = (socket: Socket, questions: Question[], cfg: Agent) => {
         content: `${cfg.name} - ${cfg.description}`
     })
 
-
     socket.on('questionRequest', async (msg) => {
-        console.log('qusteionRequest')
+
         ctx.push({
             role: 'system',
-            content: `Ask user this question: ${JSON.stringify(questions[0].text)}`,
+            content: `Zeptej se na tut otázku: ${JSON.stringify(questions[0].text)}`,
         })
         questions.shift()
 
-        const followUpUuid = randomUUID()
-        const followUpStream: ChatCompletionStream<unknown> = await  openai.beta.chat.completions.stream({
-            model: __GPT_MODEL__,
-            messages: ctx,
-            stream: true,
-        });
-
-        socket.emit('agent_stream_open', {message: '', agentId, messageId: followUpUuid});
-
-        let streamContent = ''
-        for await (const chunk of followUpStream) {
-            const message = chunk.choices[0]?.delta?.content || ''
-            streamContent += message
-            socket.emit('agent_stream_merge', {message, agentId, messageId: followUpUuid});
-        }
-        ctx.push({role: 'system', content: streamContent})
-
-        socket.emit('agent_stream_close', {message: '', agentId, messageId: followUpUuid});
+        await invokeWsStream(socket,ctx, agentId)
     })
 
     return {
         prompt: async(prompt: string) => {
-
-            // multiple stream events are linked by agentId and messageId (initialization and merge ale follow-up events)
-            const messageId = randomUUID()
-
-
             ctx.push({role: 'user', content: prompt})
+            await invokeWsToolStream(socket, ctx, agentId, questions)
+        }
+    }
+}
 
-            // first openai stream with functionCalling which will check if user asks for another question and if so, it will invoke getNextQuestion tool
-            const stream: ChatCompletionStream<unknown> = await  openai.beta.chat.completions.stream({
+const invokeWsStream = async (socket: Socket, ctx: OpenAI.Chat.Completions.ChatCompletionMessageParam[], agentId: string) => {
+    const messageId = randomUUID()
+    console.log(`invokeWsStream ${agentId} ${messageId}`)
+    const stream: ChatCompletionStream<unknown> = await  openai.beta.chat.completions.stream({
+        model: __GPT_MODEL__,
+        messages: ctx,
+        stream: true,
+    });
+
+    let streamContent = ''
+    for await (const chunk of stream) {
+        const message = chunk.choices[0]?.delta?.content || ''
+        streamContent += message
+        socket.emit('agent_stream_merge', {message, agentId, messageId});
+    }
+    ctx.push({role: 'system', content: streamContent})
+
+    socket.emit('agent_stream_close', {message: '', agentId, messageId});
+}
+
+const invokeWsToolStream = async (socket: Socket, ctx: OpenAI.Chat.Completions.ChatCompletionMessageParam[], agentId: string,  questions: Question[]) => {
+    const messageId = randomUUID()
+    console.log(`invokeWsToolStream ${agentId} ${messageId}`)
+    const stream: ChatCompletionStream<unknown> = await  openai.beta.chat.completions.stream({
+        model: __GPT_MODEL__,
+        messages: ctx,
+        stream: true,
+        tools: [{
+            type: 'function',
+            function: {
+                name: 'getNextQuestion',
+                description: `if the user asks to get another question, invoke`,
+            },
+        }]
+    })
+
+    let streamContent = ''
+    let idx = 0
+    for await (const chunk of stream) {
+        if(!chunk.choices[0].delta.tool_calls){
+            if(idx === 0) {
+                socket.emit('agent_stream_open', {message: '', agentId, messageId});
+            }
+            const message = chunk.choices[0]?.delta?.content || ''
+            streamContent += message
+            socket.emit('agent_stream_merge', {message, agentId, messageId});
+        }
+        idx++
+    }
+
+    ctx.push({role: 'system', content: streamContent})
+
+    socket.emit('agent_stream_close', {message: '', agentId, messageId});
+
+    const chatCompletion = await stream.finalChatCompletion();
+
+    const toolCalls = chatCompletion.choices[0].finish_reason === 'tool_calls'
+
+    if(!toolCalls) {
+        ctx.push({role: 'system', content: streamContent})
+    }else{
+        const toolFn =  chatCompletion.choices[0].message.tool_calls[0]
+
+        if(toolFn.function.name === 'getNextQuestion'){
+            ctx.push({
+                role: 'system',
+                content: `Ask user this question: ${JSON.stringify(questions[0].text)}`,
+            })
+            questions.shift()
+
+            // follow up stream (after functionCalling) to get the next question to the user
+            const followUpUuid = randomUUID()
+            const followUpStream: ChatCompletionStream<unknown> = await  openai.beta.chat.completions.stream({
                 model: __GPT_MODEL__,
                 messages: ctx,
                 stream: true,
-                tools: [{
-                    type: 'function',
-                    function: {
-                        name: 'getNextQuestion',
-                        description: `if the user asks to get another question, invoke`,
-                    },
-                }]
             });
 
+            socket.emit('agent_stream_open', {message: '', agentId, messageId: followUpUuid});
+
             let streamContent = ''
-            let idx = 0
-            for await (const chunk of stream) {
+            for await (const chunk of followUpStream) {
                 const message = chunk.choices[0]?.delta?.content || ''
                 streamContent += message
-                // open merge event to merge stream chunks into initial event by agentId and messageId
-
-                if(!chunk.choices[0].delta.tool_calls){
-
-                    //  initial stream event without message (placeholder for stream chunks)
-                    if(idx === 0) {
-                        console.log("VYTVARIM")
-                        socket.emit('agent_stream_open', {message: '', agentId, messageId});
-                    }
-
-                    socket.emit('agent_stream_merge', {message, agentId, messageId});
-                }
-
-                idx++
+                socket.emit('agent_stream_merge', {message, agentId, messageId: followUpUuid});
             }
+            ctx.push({role: 'system', content: streamContent})
 
-            // finalizing stream event to get functionCalling result
-            const chatCompletion = await stream.finalChatCompletion();
-
-            // if toolCalls is invoked, execute the tool function
-            const invokeToolCalling = chatCompletion.choices[0].finish_reason === 'tool_calls'
-
-            if(!invokeToolCalling) {
-                ctx.push({role: 'system', content: streamContent})
-            }
-
-
-            if(invokeToolCalling) {
-                const toolFn =  chatCompletion.choices[0].message.tool_calls[0]
-
-                if(toolFn.function.name === 'getNextQuestion'){
-                    ctx.push({
-                        role: 'system',
-                        content: `Ask user this question: ${JSON.stringify(questions[0].text)}`,
-                    })
-                    questions.shift()
-
-                    // follow up stream (after functionCalling) to get the next question to the user
-                    const followUpUuid = randomUUID()
-                    const followUpStream: ChatCompletionStream<unknown> = await  openai.beta.chat.completions.stream({
-                        model: __GPT_MODEL__,
-                        messages: ctx,
-                        stream: true,
-                    });
-
-                    socket.emit('agent_stream_open', {message: '', agentId, messageId: followUpUuid});
-
-                    let streamContent = ''
-                    for await (const chunk of followUpStream) {
-                        const message = chunk.choices[0]?.delta?.content || ''
-                        streamContent += message
-                        socket.emit('agent_stream_merge', {message, agentId, messageId: followUpUuid});
-                    }
-                    ctx.push({role: 'system', content: streamContent})
-
-                    socket.emit('agent_stream_close', {message: '', agentId, messageId: followUpUuid});
-                }
-            }
-
+            socket.emit('agent_stream_close', {message: '', agentId, messageId: followUpUuid});
         }
     }
 }
