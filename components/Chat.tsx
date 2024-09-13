@@ -1,7 +1,7 @@
 'use client';
 
 import { useContext, useState, useEffect, useRef } from 'react';
-import { PaperAirplaneIcon, ArrowUpIcon, QuestionMarkCircleIcon, ArrowDownIcon, FastForwardIcon} from '@heroicons/react/solid';
+import { PaperAirplaneIcon, ArrowUpIcon, QuestionMarkCircleIcon, ArrowDownIcon, FastForwardIcon, CodeIcon} from '@heroicons/react/solid';
 
 import { Button } from '@nextui-org/react';
 import Logo from '../images/avatar_boss.png';
@@ -10,6 +10,9 @@ import Image from 'next/image';
 import { UserContext } from '../hooks/userContext';
 import { useSession } from 'next-auth/react';
 import { useWebSocket } from "../hooks/useWebSocket";
+
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 const ChatWindow = () => {
     const [user, setUser] = useContext(UserContext) as any;
@@ -37,16 +40,46 @@ const ChatWindow = () => {
         }
     }, [newMessageId]);
 
+    const [isCodeMode, setIsCodeMode] = useState(false);
+
+    const toggleCodeMode = () => {
+        setIsCodeMode(!isCodeMode);
+    };
+
     const handleSendMessage = () => {
         if (input.trim() !== '') {
-            const newMsg = { id: messages.length + 1, text: input };
-            sendMessage(input);
+            let formattedMessage = input;
+
+            if (isCodeMode) {
+                console.log('code')
+                formattedMessage = `\`\`\`javascript\n${input}\n\`\`\``;
+            }
+
+            const newMsg = { id: messages.length + 1, text: formattedMessage };
+            sendMessage(formattedMessage);
             setInput('');
             setUser(input);
             setUserIsTyping(false);
             setNewMessageId(newMsg.id);
+
+            setIsCodeMode(false)
         }
     };
+
+    const renderMessage = (message:any) => {
+        if (message.message.startsWith('```javascript')) {
+            console.log('javascript code block detected');
+            const code = message.message.replace(/```javascript\n([\s\S]*)\n```/, '$1');
+            return (
+                <SyntaxHighlighter language="javascript" style={vs}>
+                    {code}
+                </SyntaxHighlighter>
+            );
+        }
+
+        return <span>{message.message}</span>;
+    };
+
 
     const handleNextQuestion = () => {
         if (input.trim() !== '') {
@@ -119,7 +152,7 @@ const ChatWindow = () => {
                             />
                             <div className="flex-1 min-w-0">
                                 <div className="break-words whitespace-pre-wrap overflow-hidden">
-                                    {message.message}
+                                    {renderMessage(message)}
                                 </div>
                             </div>
                         </div>
@@ -137,13 +170,22 @@ const ChatWindow = () => {
                 <textarea
                     value={input}
                     onChange={handleInputChange}
-                    placeholder="Type your message..."
+                    placeholder={isCodeMode ? '</> Enter your code here...' : 'Type your message here...'}
                     className={`flex-grow flex-shrink min-w-0 p-3 ${messageBgClass} border rounded-lg resize-none overflow-hidden`}
                     rows={1}
                     onBlur={() => setUserIsTyping(false)}
                 />
                 <div className="flex gap-4">
                     {/* Send Button */}
+                    <button
+                        onClick={toggleCodeMode}
+                        className={`${
+                            isCodeMode ? 'bg-green-400' : buttonColorClass
+                        } flex items-center gap-2 rounded-md shadow-md px-4 py-2`}
+                    >
+                        {/*<code>{isCodeMode ? 'Code Mode On' : 'Insert Code'}</code>*/}
+                        <CodeIcon className="w-5 h-5" />
+                    </button>
                     <button
                         onClick={handleSendMessage}
                         className={`${buttonColorClass} flex items-center gap-2 rounded-md shadow-md px-6 py-2`}
@@ -157,7 +199,7 @@ const ChatWindow = () => {
                         className={`${buttonColorClass} flex items-center gap-2 rounded-md shadow-md px-4 py-2`}
                     >
                         <QuestionMarkCircleIcon className="w-5 h-5" />
-                        Get next question
+                        Next question
                     </button>
                     <button
                         onClick={questionRequest}
