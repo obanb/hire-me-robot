@@ -14,6 +14,7 @@ let activeWs = {};
 
 const __EMBEDDINGS__ = 'text-embedding-3-small'
 const __GPT_MODEL__ = 'gpt-4o-mini'
+const __GPT_ASSISTANT_MODEL__ = 'gpt-4o'
 
 const embeddings = new OpenAIEmbeddings({
     model: __EMBEDDINGS__
@@ -40,6 +41,38 @@ type Question = {id:string, createdAt: string, used: boolean, text: string, agen
 
 export const linkThreadWsConnection = async(socket: Socket, handshakeToken: string) => {
 
+}
+
+export const createAgentAssistant = async(socket: Socket, cfg: Agent, questions: Question[]) => {
+    const thread = await openai.beta.threads.create();
+
+    const assistant = await openai.beta.assistants.create({
+        name: cfg.name  ,
+        instructions: cfg.description,
+        model: "gpt-4o",
+    });
+
+    socket.on('questionRequest', async (msg) => {
+        const run = await openai.beta.threads.runs.create(thread.id, {
+            assistant_id: assistant.id,
+            instructions:
+                "Please address the user as Jane Doe. The user has a premium account.",
+        });
+
+        const asstRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+
+        const messages = await openai.beta.threads.messages.list(thread.id);
+
+        questions.shift()
+
+        await invokeWsStream(socket,ctx, assistant.id)
+    })
+
+    return {
+        prompt: (text: string) => {
+
+        }
+    }
 }
 
 export const linkAgentWsConnection = async(socket: Socket, handshakeToken: string) => {

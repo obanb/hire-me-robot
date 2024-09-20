@@ -17,7 +17,7 @@ const Home = async ({ params: { hash } }) => {
                 <div className="w-2/4 ml-2 flex flex-col"> {/* Chat window container */}
                     <ChatWindow />
                 </div>
-                <div className="ml-2 flex flex-col"> {/* Avatar container */}
+                <div className="w-[12%] ml-2 flex flex-col"> {/* Avatar container */}
                     <div className="sticky top-0"> {/* Prevents AvatarPresentation from expanding */}
                         <AvatarPresentation />
                     </div>
