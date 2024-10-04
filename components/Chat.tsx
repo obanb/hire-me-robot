@@ -3,8 +3,6 @@
 import { useContext, useState, useEffect, useRef } from 'react';
 import { PaperAirplaneIcon, ArrowUpIcon, QuestionMarkCircleIcon, ArrowDownIcon, FastForwardIcon, CodeIcon} from '@heroicons/react/solid';
 
-import { Button } from '@nextui-org/react';
-import Logo from '../images/avatar_boss.png';
 import Girl from '../images/girl1.png';
 import Image from 'next/image';
 import { UserContext } from '../hooks/userContext';

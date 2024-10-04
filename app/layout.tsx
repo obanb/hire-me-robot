@@ -2,11 +2,8 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import NextUIProvider from './NextUIProvider'
-import { cn } from '@nextui-org/react'
-import {useState} from "react";
-import {UserContext} from "../hooks/userContext";
 import UserContextProvider from "./UserContextProvider";
-import { useSession, SessionProvider } from 'next-auth/react';
+import { SessionProvider } from 'next-auth/react';
 
 
 import {auth} from "../server/auth";
@@ -19,7 +16,7 @@ export const metadata: Metadata = {
 }
 
 export default async function RootLayout({children}: Readonly<{ children: React.ReactNode }>) {
-    const isAuth = auth()
+    const isAuth = await auth()
 
     console.log('isAuth', isAuth)
 

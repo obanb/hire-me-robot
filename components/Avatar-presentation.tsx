@@ -1,8 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import Agent1 from '../images/girl1.png'; // Update with your actual logo path
-import Agent2 from '../images/man1.png'; // Update with your actual logo path
+import Agent1 from '../images/girl1.png';
+import Agent2 from '../images/man1.png';
 
 const AvatarSection = ({ avatarSrc, userName, description }) => {
     return (
