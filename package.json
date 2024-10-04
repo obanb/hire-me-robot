@@ -15,6 +15,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.3",
     "@auth/drizzle-adapter": "^1.4.2",
     "@heroicons/react": "v1",
     "@langchain/pinecone": "^0.0.9",
